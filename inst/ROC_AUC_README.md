@@ -8,7 +8,7 @@ The ROC/AUC functionality provides a way to evaluate the performance of PLS-DA c
 
 - **ROC curve calculation**: Computes True Positive Rate (TPR) and False Positive Rate (FPR) at various classification thresholds
 - **AUC calculation**: Computes the Area Under the ROC Curve using trapezoidal integration
-- **Visualization**: Plots ROC curves with customizable appearance and optional AUC values in legends
+- **Visualization**: Plots ROC curves using ggplot2 with customizable appearance and optional AUC values in legends
 
 ## Functions
 
@@ -49,7 +49,7 @@ print(roc.res)
 
 ### `plotROC(obj, ncomp = NULL, nc = NULL, show.auc = TRUE, ...)`
 
-Creates a plot of ROC curves.
+Creates a ggplot2 plot of ROC curves.
 
 **Arguments:**
 - `obj`: Classification results object or a `roc` object from `getROC()`
@@ -57,15 +57,18 @@ Creates a plot of ROC curves.
 - `nc`: Which class(es) to plot (default: all classes)
 - `show.auc`: Whether to show AUC values in the legend (default: TRUE)
 - `main`: Main title for the plot
-- `legend.position`: Position of legend ("bottomright", "topright", etc., or "none")
+- `legend.position`: Position of legend ("bottom", "top", "left", "right", or "none")
 - `col`: Vector of colors for each class
-- `lty`: Vector of line types for each class
 - `lwd`: Line width
+
+**Returns:**
+A ggplot2 plot object that can be displayed with `print()` or further customized.
 
 **Example:**
 ```r
 # Plot ROC curves for all classes
-plotROC(test.res, main = "ROC Curves - Test Set")
+p <- plotROC(test.res, main = "ROC Curves - Test Set")
+print(p)
 
 # Plot for specific classes only
 plotROC(test.res, nc = 1:2)

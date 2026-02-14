@@ -48,15 +48,17 @@ print(roc.res)
 
 # Plot ROC curves for all classes
 cat("\nPlotting ROC curves for all classes...\n")
-par(mfrow = c(1, 1))
-plotROC(test.res, main = "ROC Curves - Test Set (All Classes)")
+p <- plotROC(test.res, main = "ROC Curves - Test Set (All Classes)")
+print(p)
 
 # Plot ROC curves for specific classes
-par(mfrow = c(1, 3))
-plotROC(test.res, nc = 1, main = "ROC: setosa")
-plotROC(test.res, nc = 2, main = "ROC: versicolor")
-plotROC(test.res, nc = 3, main = "ROC: virginica")
-par(mfrow = c(1, 1))
+cat("\nPlotting ROC curves for individual classes...\n")
+p1 <- plotROC(test.res, nc = 1, main = "ROC: setosa")
+p2 <- plotROC(test.res, nc = 2, main = "ROC: versicolor")
+p3 <- plotROC(test.res, nc = 3, main = "ROC: virginica")
+print(p1)
+print(p2)
+print(p3)
 
 ###############################################################################
 # Example 2: ROC/AUC for calibration and cross-validation results
@@ -76,11 +78,13 @@ roc.cv <- getROC(model$cvres)
 print(roc.cv)
 
 # Compare ROC curves for calibration, CV, and test sets
-par(mfrow = c(1, 3))
-plotROC(model$calres, nc = 1, main = "ROC: Calibration")
-plotROC(model$cvres, nc = 1, main = "ROC: Cross-Validation")
-plotROC(test.res, nc = 1, main = "ROC: Test Set")
-par(mfrow = c(1, 1))
+cat("\nComparing ROC curves for different datasets...\n")
+p1 <- plotROC(model$calres, nc = 1, main = "ROC: Calibration")
+p2 <- plotROC(model$cvres, nc = 1, main = "ROC: Cross-Validation")
+p3 <- plotROC(test.res, nc = 1, main = "ROC: Test Set")
+print(p1)
+print(p2)
+print(p3)
 
 ###############################################################################
 # Example 3: One-class PLS-DA model
@@ -109,7 +113,8 @@ cat("\nOne-class model ROC/AUC:\n")
 roc.oneclass <- getROC(test.res.oneclass)
 print(roc.oneclass)
 
-plotROC(test.res.oneclass, main = "ROC Curve - One-class Model (virginica)")
+p <- plotROC(test.res.oneclass, main = "ROC Curve - One-class Model (virginica)")
+print(p)
 
 ###############################################################################
 # Example 4: ROC curves with different numbers of components
@@ -130,12 +135,12 @@ for (nc in 1:5) {
 }
 
 # Plot ROC curves for different component numbers
-par(mfrow = c(2, 3))
+cat("\nPlotting ROC curves for different component numbers...\n")
 for (nc in 1:5) {
-   plotROC(test.res.multi, ncomp = nc, nc = 1, 
+   p <- plotROC(test.res.multi, ncomp = nc, nc = 1, 
            main = sprintf("ROC: %d comp(s)", nc))
+   print(p)
 }
-par(mfrow = c(1, 1))
 
 ###############################################################################
 # Example 5: Customizing ROC plots
@@ -145,19 +150,22 @@ cat("\nExample 5: Customizing ROC plots\n")
 cat("=================================\n\n")
 
 # Plot with custom colors and without AUC in legend
-plotROC(test.res, col = c("red", "blue", "green"), 
+p1 <- plotROC(test.res, col = c("red", "blue", "green"), 
         show.auc = FALSE, 
         main = "Custom ROC Curves (No AUC)",
-        legend.position = "bottomright")
+        legend.position = "bottom")
+print(p1)
 
-# Plot with different line styles
-plotROC(test.res, lty = c(1, 2, 3), lwd = 2,
-        main = "ROC Curves with Different Line Styles",
-        legend.position = "bottomright")
+# Plot with different line width
+p2 <- plotROC(test.res, lwd = 1.5,
+        main = "ROC Curves with Custom Line Width",
+        legend.position = "right")
+print(p2)
 
 # Plot without legend
-plotROC(test.res, legend.position = "none",
+p3 <- plotROC(test.res, legend.position = "none",
         main = "ROC Curves (No Legend)")
+print(p3)
 
 cat("\n\nAll examples completed!\n")
 cat("Note: Review the generated plots to verify ROC/AUC functionality.\n\n")

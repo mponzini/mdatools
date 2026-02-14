@@ -862,7 +862,7 @@ calculateAUC <- function(fpr, tpr) {
 #'
 #' @description
 #' Creates a plot of ROC (Receiver Operating Characteristic) curves showing the True Positive
-#' Rate vs. False Positive Rate for classification results.
+#' Rate vs. False Positive Rate for classification results using ggplot2.
 #'
 #' @param obj
 #' classification results (object of class \code{classres}, \code{plsdares}, etc.) or
@@ -877,20 +877,23 @@ calculateAUC <- function(fpr, tpr) {
 #' @param main
 #' main title for the plot.
 #' @param legend.position
-#' position of the legend ("bottomright", "topright", "topleft", "bottomleft", or "none").
+#' position of the legend ("bottom", "top", "left", "right", or "none").
 #' @param col
 #' vector of colors for each class.
 #' @param lty
-#' vector of line types for each class.
+#' vector of line types for each class (not used with ggplot2, kept for compatibility).
 #' @param lwd
 #' line width.
 #' @param ...
-#' other graphical parameters.
+#' other graphical parameters (not used with ggplot2, kept for compatibility).
 #'
 #' @details
 #' The function creates a ROC curve plot with the diagonal reference line (random classifier).
 #' If multiple classes are specified, they are plotted with different colors and included in
 #' the legend with their respective AUC values (if \code{show.auc = TRUE}).
+#'
+#' @return
+#' A ggplot2 plot object.
 #'
 #' @seealso
 #' \code{\link{getROC.classres}} for calculating ROC curves and AUC values.
@@ -916,8 +919,13 @@ calculateAUC <- function(fpr, tpr) {
 #'
 #' @export
 plotROC.classres <- function(obj, ncomp = NULL, nc = NULL, show.auc = TRUE,
-                              main = "ROC Curves", legend.position = "bottomright",
+                              main = "ROC Curves", legend.position = "bottom",
                               col = NULL, lty = 1, lwd = 2, ...) {
+
+   # Check if ggplot2 is available
+   if (!requireNamespace("ggplot2", quietly = TRUE)) {
+      stop("Package 'ggplot2' is required for plotROC. Please install it with install.packages('ggplot2')")
+   }
 
    # If obj is already a roc object, use it directly
    if (inherits(obj, "roc")) {
@@ -939,38 +947,56 @@ plotROC.classres <- function(obj, ncomp = NULL, nc = NULL, show.auc = TRUE,
       col <- rep(col, length.out = n_classes)
    }
 
-   # Set up line types
-   if (length(lty) < n_classes) {
-      lty <- rep(lty, length.out = n_classes)
-   }
-
-   # Create empty plot
-   plot(0, 0, type = "n", xlim = c(0, 1), ylim = c(0, 1),
-        xlab = "False Positive Rate (1 - Specificity)",
-        ylab = "True Positive Rate (Sensitivity)",
-        main = main, ...)
-
-   # Add diagonal reference line (random classifier)
-   abline(0, 1, col = "gray", lty = 2)
-
-   # Plot ROC curves for each class
+   # Prepare data for ggplot2
+   roc_data_list <- list()
    for (i in seq_along(roc_res$classnames)) {
       class_name <- roc_res$classnames[i]
       roc_data <- roc_res$roc[[class_name]]
-      lines(roc_data$fpr, roc_data$tpr, col = col[i], lty = lty[i], lwd = lwd)
-   }
-
-   # Add legend
-   if (legend.position != "none") {
-      legend_labels <- if (show.auc) {
-         sprintf("%s (AUC = %.3f)", roc_res$classnames, roc_res$auc)
+      
+      # Create label with or without AUC
+      if (show.auc) {
+         label <- sprintf("%s (AUC = %.3f)", class_name, roc_res$auc[i])
       } else {
-         roc_res$classnames
+         label <- class_name
       }
-
-      legend(legend.position, legend = legend_labels, col = col,
-             lty = lty, lwd = lwd, bty = "n")
+      
+      roc_data_list[[i]] <- data.frame(
+         FPR = roc_data$fpr,
+         TPR = roc_data$tpr,
+         Class = label,
+         stringsAsFactors = FALSE
+      )
    }
+   
+   # Combine all ROC data
+   plot_data <- do.call(rbind, roc_data_list)
+   
+   # Create ggplot
+   p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = FPR, y = TPR, color = Class)) +
+      ggplot2::geom_line(linewidth = lwd) +
+      ggplot2::geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray") +
+      ggplot2::scale_color_manual(values = col) +
+      ggplot2::labs(
+         x = "False Positive Rate (1 - Specificity)",
+         y = "True Positive Rate (Sensitivity)",
+         title = main,
+         color = NULL
+      ) +
+      ggplot2::theme_bw() +
+      ggplot2::theme(
+         legend.position = legend.position,
+         plot.title = ggplot2::element_text(hjust = 0.5)
+      ) +
+      ggplot2::coord_fixed(ratio = 1) +
+      ggplot2::xlim(0, 1) +
+      ggplot2::ylim(0, 1)
+   
+   # Handle legend position "none"
+   if (legend.position == "none") {
+      p <- p + ggplot2::theme(legend.position = "none")
+   }
+   
+   return(p)
 }
 
 #' @rdname plotROC.classres
