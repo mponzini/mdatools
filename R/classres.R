@@ -710,12 +710,14 @@ getROC.classres <- function(obj, ncomp = obj$ncomp.selected, nc = seq_len(obj$nc
 
    # Validate ncomp
    if (is.null(ncomp) || ncomp < 1 || ncomp > obj$ncomp) {
-      stop("Invalid value for 'ncomp' parameter.")
+      stop(sprintf("'ncomp' must be between 1 and %d, got %s", obj$ncomp, 
+                   ifelse(is.null(ncomp), "NULL", as.character(ncomp))))
    }
 
    # Validate nc
    if (any(nc < 1) || any(nc > obj$nclasses)) {
-      stop("Invalid value for 'nc' parameter.")
+      stop(sprintf("'nc' must be between 1 and %d, got values outside this range", 
+                   obj$nclasses))
    }
 
    # Get attributes and remove excluded rows

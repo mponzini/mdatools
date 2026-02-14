@@ -1,13 +1,20 @@
 # Tests for ROC/AUC functionality
 
+# Store temporary file paths for cleanup
+pdf_file <- tempfile("mdatools-test-roc-", fileext = ".pdf")
+txt_file <- tempfile("mdatools-test-roc-", fileext = ".txt")
+
 setup({
-   pdf(file = tempfile("mdatools-test-roc-", fileext = ".pdf"))
-   sink(tempfile("mdatools-test-roc-", fileext = ".txt"), append = FALSE, split = FALSE)
+   pdf(file = pdf_file)
+   sink(txt_file, append = FALSE, split = FALSE)
 })
 
 teardown({
    dev.off()
    sink()
+   # Clean up temporary files
+   if (file.exists(pdf_file)) unlink(pdf_file)
+   if (file.exists(txt_file)) unlink(txt_file)
 })
 
 ## prepare datasets

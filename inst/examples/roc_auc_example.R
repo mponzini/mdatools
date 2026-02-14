@@ -159,5 +159,5 @@ plotROC(test.res, lty = c(1, 2, 3), lwd = 2,
 plotROC(test.res, legend.position = "none",
         main = "ROC Curves (No Legend)")
 
-cat("\n\nAll examples completed successfully!\n")
-cat("ROC/AUC functionality is working as expected.\n\n")
+cat("\n\nAll examples completed!\n")
+cat("Note: Review the generated plots to verify ROC/AUC functionality.\n\n")
