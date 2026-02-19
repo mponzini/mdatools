@@ -1,0 +1,8 @@
+
+=== Loading mdatools package ===
+
+=== Running test-plsda.R ===
+Error in expect_equivalent(obj$xloadings[exclcols, , drop = F], matrix(0,  : 
+  could not find function "expect_equivalent"
+Calls: source -> withVisible -> eval -> eval
+Execution halted

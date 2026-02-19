@@ -201,6 +201,8 @@ plsda <- function(x, c, ncomp = min(nrow(x) - 1, ncol(x), 20), center = TRUE, sc
       # redefine
       cvres <- plsdares(pls_res, class_res)
       cvres$info <- "cross-validation results"
+      cvres$jk.vipscores <- res$jk.vipscores
+      model$jk.vipscores <- res$jk.vipscores
    }
 
    # add additional class names, info and call
