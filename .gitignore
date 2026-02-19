@@ -16,3 +16,4 @@ tests/matlab/*
 linting.R
 mdatools.Rproj
 localtests.R
+test-output.log
