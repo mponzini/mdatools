@@ -627,3 +627,400 @@ plotPredictions.classres <- function(obj, nc = seq_len(obj$nclasses), ncomp = ob
 plot.classres <- function(x, ...) {
    plotPredictions.classres(x, ...)
 }
+
+
+################################
+#  ROC/AUC methods             #
+################################
+
+#' Calculate ROC curve and AUC for classification results
+#'
+#' @description
+#' Computes Receiver Operating Characteristic (ROC) curve and calculates the Area Under the
+#' Curve (AUC) for PLS-DA and other classification models. Similar to the auroc function
+#' from the mixOmics package.
+#'
+#' @param obj
+#' classification results (object of class \code{classres}, \code{plsdares}, etc.).
+#' @param ncomp
+#' number of components to calculate ROC/AUC for (if NULL, uses selected optimal value).
+#' @param nc
+#' which class to calculate ROC/AUC for (can be a vector for multiple classes).
+#'
+#' @return
+#' A list with class "roc" containing:
+#' \item{roc}{a list of ROC curve data for each class, each containing TPR, FPR, and thresholds.}
+#' \item{auc}{a named vector of AUC values for each class.}
+#' \item{ncomp}{number of components used.}
+#' \item{classnames}{names of the classes.}
+#'
+#' @details
+#' The ROC curve is constructed by varying the classification threshold on the continuous
+#' predictions (\code{p.pred} values) and calculating the True Positive Rate (TPR, sensitivity)
+#' and False Positive Rate (FPR, 1-specificity) at each threshold.
+#'
+#' The AUC (Area Under the Curve) is calculated using the trapezoidal rule and provides a
+#' single-number summary of the classifier performance, where:
+#' \itemize{
+#'   \item AUC = 1.0: perfect classifier
+#'   \item AUC = 0.5: random classifier
+#'   \item AUC < 0.5: worse than random (predictions are inverted)
+#' }
+#'
+#' This function requires reference class values (\code{c.ref}) to be available in the
+#' classification results object.
+#'
+#' @seealso
+#' \code{\link{plotROC.classres}} for plotting ROC curves.
+#'
+#' @examples
+#' \dontrun{
+#' # Create a PLS-DA model
+#' library(mdatools)
+#' data(iris)
+#'
+#' x.cal <- iris[seq(1, nrow(iris), 2), 1:4]
+#' c.cal <- iris[seq(1, nrow(iris), 2), 5]
+#' x.test <- iris[seq(2, nrow(iris), 2), 1:4]
+#' c.test <- iris[seq(2, nrow(iris), 2), 5]
+#'
+#' model <- plsda(x.cal, c.cal, ncomp = 3, cv = 1)
+#' res <- predict(model, x.test, c.test)
+#'
+#' # Calculate ROC/AUC
+#' roc_res <- getROC(res)
+#' print(roc_res$auc)
+#'
+#' # Plot ROC curves
+#' plotROC(res)
+#' }
+#'
+#' @export
+getROC.classres <- function(obj, ncomp = obj$ncomp.selected, nc = seq_len(obj$nclasses)) {
+
+   # Check if reference values are available
+   if (is.null(obj$c.ref)) {
+      stop("Reference class values are required to calculate ROC/AUC.")
+   }
+
+   # Check if prediction probabilities are available
+   if (is.null(obj$p.pred)) {
+      stop("Prediction values (p.pred) are required to calculate ROC/AUC.")
+   }
+
+   # Validate ncomp
+   if (is.null(ncomp) || ncomp < 1 || ncomp > obj$ncomp) {
+      stop(sprintf("'ncomp' must be between 1 and %d, got %s", obj$ncomp, 
+                   ifelse(is.null(ncomp), "NULL", as.character(ncomp))))
+   }
+
+   # Validate nc
+   if (any(nc < 1) || any(nc > obj$nclasses)) {
+      stop(sprintf("'nc' must be between 1 and %d, got values outside this range", 
+                   obj$nclasses))
+   }
+
+   # Get attributes and remove excluded rows
+   attrs <- mda.getattr(obj$p.pred)
+   c.ref <- obj$c.ref
+   p.pred <- obj$p.pred[, ncomp, , drop = FALSE]
+
+   if (length(attrs$exclrows) > 0) {
+      p.pred <- p.pred[-attrs$exclrows, , , drop = FALSE]
+      c.ref <- c.ref[-attrs$exclrows]
+   }
+
+   # Calculate ROC curve and AUC for each class
+   roc_list <- list()
+   auc_values <- numeric(length(nc))
+   names(auc_values) <- obj$classnames[nc]
+
+   for (i in seq_along(nc)) {
+      class_idx <- nc[i]
+      class_name <- obj$classnames[class_idx]
+
+      # Get predictions and true labels for this class
+      scores <- p.pred[, 1, class_idx]
+      labels <- c.ref == class_name
+
+      # Calculate ROC curve
+      roc_data <- calculateROC(scores, labels)
+
+      # Calculate AUC using trapezoidal rule
+      auc_values[i] <- calculateAUC(roc_data$fpr, roc_data$tpr)
+
+      roc_list[[class_name]] <- roc_data
+   }
+
+   result <- list(
+      roc = roc_list,
+      auc = auc_values,
+      ncomp = ncomp,
+      classnames = obj$classnames[nc]
+   )
+
+   class(result) <- "roc"
+   return(result)
+}
+
+#' @rdname getROC.classres
+#' @export
+getROC <- function(obj, ...) {
+   UseMethod("getROC")
+}
+
+#' Calculate ROC curve from scores and labels
+#'
+#' @description
+#' Internal function to calculate ROC curve data points.
+#'
+#' @param scores
+#' numeric vector of prediction scores
+#' @param labels
+#' logical vector of true class labels (TRUE for positive class)
+#'
+#' @return
+#' A list containing TPR, FPR, and thresholds
+#'
+#' @keywords internal
+calculateROC <- function(scores, labels) {
+
+   # Sort by scores in descending order
+   order_idx <- order(scores, decreasing = TRUE)
+   scores_sorted <- scores[order_idx]
+   labels_sorted <- labels[order_idx]
+
+   # Total positives and negatives
+   n_pos <- sum(labels)
+   n_neg <- sum(!labels)
+
+   # Initialize vectors for ROC curve
+   # Add points at (0,0) and (1,1)
+   n_points <- length(scores) + 1
+   tpr <- numeric(n_points)
+   fpr <- numeric(n_points)
+   thresholds <- numeric(n_points)
+
+   # Start at (0, 0) with threshold = Inf
+   tpr[1] <- 0
+   fpr[1] <- 0
+   thresholds[1] <- Inf
+
+   # Calculate cumulative TP and FP
+   tp <- 0
+   fp <- 0
+
+   for (i in seq_along(scores_sorted)) {
+      if (labels_sorted[i]) {
+         tp <- tp + 1
+      } else {
+         fp <- fp + 1
+      }
+
+      tpr[i + 1] <- tp / n_pos
+      fpr[i + 1] <- fp / n_neg
+      thresholds[i + 1] <- scores_sorted[i]
+   }
+
+   return(list(
+      tpr = tpr,
+      fpr = fpr,
+      thresholds = thresholds
+   ))
+}
+
+#' Calculate AUC using trapezoidal rule
+#'
+#' @description
+#' Internal function to calculate Area Under the ROC Curve.
+#'
+#' @param fpr
+#' numeric vector of False Positive Rates
+#' @param tpr
+#' numeric vector of True Positive Rates
+#'
+#' @return
+#' Numeric AUC value
+#'
+#' @keywords internal
+calculateAUC <- function(fpr, tpr) {
+   # Sort by FPR to ensure correct ordering
+   order_idx <- order(fpr)
+   fpr <- fpr[order_idx]
+   tpr <- tpr[order_idx]
+
+   # Trapezoidal integration
+   auc <- 0
+   for (i in seq_len(length(fpr) - 1)) {
+      auc <- auc + (fpr[i + 1] - fpr[i]) * (tpr[i] + tpr[i + 1]) / 2
+   }
+
+   return(auc)
+}
+
+#' Plot ROC curves for classification results
+#'
+#' @description
+#' Creates a plot of ROC (Receiver Operating Characteristic) curves showing the True Positive
+#' Rate vs. False Positive Rate for classification results using ggplot2.
+#'
+#' @param obj
+#' classification results (object of class \code{classres}, \code{plsdares}, etc.) or
+#' an object of class \code{roc} returned by \code{\link{getROC.classres}}.
+#' @param ncomp
+#' number of components to use (if NULL, uses selected optimal value). Only used if
+#' \code{obj} is not already a \code{roc} object.
+#' @param nc
+#' which class(es) to plot ROC curves for. Can be a vector for multiple classes.
+#' @param show.auc
+#' logical, whether to show AUC values in the legend.
+#' @param main
+#' main title for the plot.
+#' @param legend.position
+#' position of the legend ("bottom", "top", "left", "right", or "none").
+#' @param col
+#' vector of colors for each class.
+#' @param lty
+#' vector of line types for each class (not used with ggplot2, kept for compatibility).
+#' @param lwd
+#' line width.
+#' @param ...
+#' other graphical parameters (not used with ggplot2, kept for compatibility).
+#'
+#' @details
+#' The function creates a ROC curve plot with the diagonal reference line (random classifier).
+#' If multiple classes are specified, they are plotted with different colors and included in
+#' the legend with their respective AUC values (if \code{show.auc = TRUE}).
+#'
+#' @return
+#' A ggplot2 plot object.
+#'
+#' @seealso
+#' \code{\link{getROC.classres}} for calculating ROC curves and AUC values.
+#'
+#' @examples
+#' \dontrun{
+#' # Create a PLS-DA model
+#' library(mdatools)
+#' data(iris)
+#'
+#' x.cal <- iris[seq(1, nrow(iris), 2), 1:4]
+#' c.cal <- iris[seq(1, nrow(iris), 2), 5]
+#' x.test <- iris[seq(2, nrow(iris), 2), 1:4]
+#' c.test <- iris[seq(2, nrow(iris), 2), 5]
+#'
+#' model <- plsda(x.cal, c.cal, ncomp = 3, cv = 1)
+#' res <- predict(model, x.test, c.test)
+#'
+#' # Plot ROC curves
+#' plotROC(res)
+#' plotROC(res, nc = 1:2)  # Plot only first two classes
+#' }
+#'
+#' @export
+plotROC.classres <- function(obj, ncomp = NULL, nc = NULL, show.auc = TRUE,
+                              main = "ROC Curves", legend.position = "bottom",
+                              col = NULL, lty = 1, lwd = 2, ...) {
+
+   # Check if ggplot2 is available
+   if (!requireNamespace("ggplot2", quietly = TRUE)) {
+      stop("Package 'ggplot2' is required for plotROC. Please install it with install.packages('ggplot2')")
+   }
+
+   # If obj is already a roc object, use it directly
+   if (inherits(obj, "roc")) {
+      roc_res <- obj
+      if (is.null(nc)) nc <- seq_along(roc_res$classnames)
+   } else {
+      # Calculate ROC if not already done
+      if (is.null(ncomp)) ncomp <- obj$ncomp.selected
+      if (is.null(nc)) nc <- seq_len(obj$nclasses)
+      roc_res <- getROC(obj, ncomp = ncomp, nc = nc)
+   }
+
+   n_classes <- length(roc_res$classnames)
+
+   # Set up colors if not provided
+   if (is.null(col)) {
+      col <- mdaplot.getColors(n_classes)
+   } else if (length(col) < n_classes) {
+      col <- rep(col, length.out = n_classes)
+   }
+
+   # Prepare data for ggplot2
+   roc_data_list <- list()
+   for (i in seq_along(roc_res$classnames)) {
+      class_name <- roc_res$classnames[i]
+      roc_data <- roc_res$roc[[class_name]]
+      
+      # Create label with or without AUC
+      if (show.auc) {
+         label <- sprintf("%s (AUC = %.3f)", class_name, roc_res$auc[i])
+      } else {
+         label <- class_name
+      }
+      
+      roc_data_list[[i]] <- data.frame(
+         FPR = roc_data$fpr,
+         TPR = roc_data$tpr,
+         Class = label,
+         stringsAsFactors = FALSE
+      )
+   }
+   
+   # Combine all ROC data
+   plot_data <- do.call(rbind, roc_data_list)
+   
+   # Create ggplot
+   p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = FPR, y = TPR, color = Class)) +
+      ggplot2::geom_line(linewidth = lwd) +
+      ggplot2::geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "gray") +
+      ggplot2::scale_color_manual(values = col) +
+      ggplot2::labs(
+         x = "False Positive Rate (1 - Specificity)",
+         y = "True Positive Rate (Sensitivity)",
+         title = main,
+         color = NULL
+      ) +
+      ggplot2::theme_bw() +
+      ggplot2::theme(
+         legend.position = legend.position,
+         plot.title = ggplot2::element_text(hjust = 0.5)
+      ) +
+      ggplot2::coord_fixed(ratio = 1) +
+      ggplot2::xlim(0, 1) +
+      ggplot2::ylim(0, 1)
+   
+   # Handle legend position "none"
+   if (legend.position == "none") {
+      p <- p + ggplot2::theme(legend.position = "none")
+   }
+   
+   return(p)
+}
+
+#' @rdname plotROC.classres
+#' @export
+plotROC <- function(obj, ...) {
+   UseMethod("plotROC")
+}
+
+#' Print method for ROC results
+#'
+#' @param x
+#' ROC results object (class "roc")
+#' @param ...
+#' other arguments
+#'
+#' @export
+print.roc <- function(x, ...) {
+   cat("\nROC Curve and AUC Results\n")
+   cat("-------------------------\n")
+   fprintf("Number of components: %d\n", x$ncomp)
+   fprintf("Number of classes: %d\n", length(x$classnames))
+   cat("\nAUC values:\n")
+   for (i in seq_along(x$auc)) {
+      fprintf("  %s: %.4f\n", names(x$auc)[i], x$auc[i])
+   }
+   cat("\n")
+}
