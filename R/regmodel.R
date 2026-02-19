@@ -71,6 +71,7 @@ crossval.regmodel <- function(obj, x, y, cv, cal.fun, pred.fun, cv.scope = 'loca
    # prepare arrays for results
    yp.cv <- array(0, dim = c(nobj, ncomp, nresp))
    jk.coeffs <- array(0, dim = c(nvar, ncomp, nresp, nseg))
+   jk.vipscores <- NULL
 
    # define values for global scaling
    xcenter <- obj$xcenter
@@ -129,12 +130,41 @@ crossval.regmodel <- function(obj, x, y, cv, cal.fun, pred.fun, cv.scope = 'loca
          yp.cv[ind, , ] <- yp.cv[ind, , , drop = FALSE] + yp
          jk.coeffs[, , , is] <- jk.coeffs[, , , is, drop = FALSE] +
             array(m.loc$coeffs$values, dim = c(dim(m.loc$coeffs$values), 1))
+
+         # compute and save VIP scores for each number of components (if supported by local model)
+         if (!is.null(m.loc$yloadings) && !is.null(m.loc$xeigenvals)) {
+            if (is.null(jk.vipscores)) {
+               jk.vipscores <- array(0, dim = c(nvar, ncomp, nresp, nseg))
+            }
+            for (a in seq_len(ncomp)) {
+               weights_a <- m.loc$weights[, seq_len(a), drop = FALSE]
+               yloads_a <- m.loc$yloadings[, seq_len(a), drop = FALSE]
+               eigenvals_a <- m.loc$xeigenvals[seq_len(a)]
+
+               wnorm <- sweep(weights_a, 2, sqrt(colSums(weights_a^2)), "/")
+               ssq <- sweep(yloads_a^2, 2, eigenvals_a, "*")
+               ssq <- sweep(ssq, 1, rowSums(ssq), "/")
+               jk.vipscores[, a, , is] <- jk.vipscores[, a, , is] +
+                  sqrt(nvar * wnorm^2 %*% t(ssq))
+            }
+         }
       }
    }
 
    # average results over repetitions
    yp.cv <- yp.cv / nrep
    jk.coeffs <- jk.coeffs / nrep
+
+   # average vipscores over repetitions and set names
+   if (!is.null(jk.vipscores)) {
+      jk.vipscores <- jk.vipscores / nrep
+      dimnames(jk.vipscores) <- list(
+         colnames(x),
+         colnames(obj$coeffs$values),
+         colnames(y),
+         seq_len(nseg)
+      )
+   }
 
    # set up names
    dimnames(jk.coeffs) <- list(
@@ -151,7 +181,7 @@ crossval.regmodel <- function(obj, x, y, cv, cal.fun, pred.fun, cv.scope = 'loca
    )
 
    # make pls results and return
-   return(list(y.pred = yp.cv, y.ref = y.ref, jk.coeffs = jk.coeffs))
+   return(list(y.pred = yp.cv, y.ref = y.ref, jk.coeffs = jk.coeffs, jk.vipscores = jk.vipscores))
 }
 
 #' Regression coefficients for PLS model'

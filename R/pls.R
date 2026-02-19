@@ -289,6 +289,7 @@ pls <- function(x, y, ncomp = min(nrow(x) - 1, ncol(x), 20), center = TRUE, scal
       model$res[["cv"]]$info <- "cross-validation results"
       model$cvres <- model$res[["cv"]]
       model$coeffs <- regcoeffs(model$coeffs$values, cvres$jk.coeffs)
+      model$jk.vipscores <- cvres$jk.vipscores
    }
 
    # do test set validation if provided
@@ -1892,7 +1893,9 @@ pls.cal <- function(x, y, ncomp, center, scale, method = "simpls", cv = FALSE) {
    if (is.logical(cv) && cv) {
       model$coeffs <- regcoeffs(fit$coeffs)
       model$xloadings <- fit$xloadings
+      model$yloadings <- fit$yloadings
       model$weights <- fit$weights
+      model$xeigenvals <- colSums(fit$xscores^2) / (xc.nrows - 1)
       return(model)
    }
 

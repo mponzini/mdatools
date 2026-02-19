@@ -470,6 +470,47 @@ test_that("vipscores for people data (A = 4) identical to once computed in MATLA
 })
 
 
+######################################################
+# Block 5b. Tests jk.vipscores in CV models         #
+# (extends Block 5: tests VIP scores from CV models) #
+######################################################
+
+context("pls: test jk.vipscores in cross-validation models")
+
+test_that("jk.vipscores is NULL for models without cross-validation", {
+   d <- datasets[[1]]
+   m <- pls(d$xc, d$yc, d$ncomp, center = d$center, scale = d$scale)
+   expect_null(m$jk.vipscores)
+})
+
+for (i in seq_along(datasets)) {
+
+   d <- datasets[[i]]
+   name <- names(datasets)[i]
+   nseg <- 10
+   m <- pls(d$xc, d$yc, d$ncomp, center = d$center, scale = d$scale, cv = nseg)
+
+   test_that(sprintf("jk.vipscores has correct structure for dataset '%s'", name), {
+      exclcols <- attr(d$xc, "exclcols")
+      nvar_active <- ncol(d$xc) - length(exclcols)
+      active_names <- if (length(exclcols) > 0) colnames(d$xc)[-exclcols] else colnames(d$xc)
+
+      expect_false(is.null(m$jk.vipscores))
+      expect_equal(length(dim(m$jk.vipscores)), 4)
+      expect_equal(dim(m$jk.vipscores)[1], nvar_active)
+      expect_equal(dim(m$jk.vipscores)[2], m$ncomp)
+      expect_equal(dim(m$jk.vipscores)[3], ncol(d$yc))
+      expect_equal(dim(m$jk.vipscores)[4], nseg)
+      expect_equal(dimnames(m$jk.vipscores)[[1]], active_names)
+      expect_equal(dimnames(m$jk.vipscores)[[3]], colnames(d$yc))
+   })
+
+   test_that(sprintf("jk.vipscores values are non-negative for dataset '%s'", name), {
+      expect_true(all(m$jk.vipscores >= 0))
+   })
+}
+
+
 ######################################
 # Block 6. Tests selratio()  method  #
 ######################################
